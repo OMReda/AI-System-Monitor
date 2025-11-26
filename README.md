@@ -1,2 +1,2 @@
 # AI System Monitor 
-Cross-platform System Performance &amp; Process Manager built with C++ and Flask. Provides real-time monitoring of CPU, RAM, and Disk usage with historical log analysis and an interactive web dashboard.
+An intelligent tool that continuously analyzes your system’s performance, detects anomalies, predicts potential bottlenecks, and optimizes CPU, RAM, and disk usage in real-time—all accessible through an interactive web dashboard with historical performance insights.

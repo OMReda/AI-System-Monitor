@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SysMonitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-cpu: #38bdf8;
+            --accent-ram: #a78bfa;
+            --accent-net: #34d399;
+            --danger: #fb7185;
+            --success: #34d399;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* Center horizontally */
+            justify-content: center;
+            /* Center vertically */
+        }
+
+        .backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(167, 139, 250, 0.08), transparent 25%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 95%;
+            /* Responsive width */
+            margin: 0 auto;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 1.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-badge.disconnected {
+            background: rgba(251, 113, 133, 0.1);
+            color: var(--danger);
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .btn i {
+            font-size: 0.9em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            /* Force 2 columns */
+            gap: 24px;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+                /* Stack on mobile */
+            }
+        }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .metric-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .metric-value {
+            font-size: 3rem;
+            font-weight: 300;
+            line-height: 1;
+            margin: 10px 0;
+            font-feature-settings: "tnum";
+            text-shadow: 0 0 40px rgba(56, 189, 248, 0.2);
+        }
+
+        .metric-sub {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 180px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .alert-badge {
+            background: var(--danger);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: none;
+            box-shadow: 0 4px 12px rgba(251, 113, 133, 0.4);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(251, 113, 133, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(251, 113, 133, 0);
+            }
+        }
+
+        .prediction-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            color: var(--accent-cpu);
+            background: rgba(56, 189, 248, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="backdrop"></div>
+    <div class="container">
+        <header>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <div
+                    style="background: linear-gradient(45deg, var(--accent-cpu), var(--accent-ram)); width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);">
+                    <i class="fas fa-wave-square" style="color:white; font-size:1.2rem;"></i>
+                </div>
+                <div>
+                    <h1>SysMonitor</h1>
+                    <div id="connection-status" class="status-badge">Connecting...</div>
+                </div>
+            </div>
+            <div class="actions">
+                <a href="/export/csv" class="btn"><i class="fas fa-file-csv"></i> Export CSV</a>
+                <a href="/export/json" class="btn"><i class="fas fa-file-code"></i> Export JSON</a>
+            </div>
+        </header>
+
+        <!-- AI Recommendation Banner -->
+        <div id="ai-rec"
+            style="background: rgba(56, 189, 248, 0.1); border: 1px solid var(--accent-cpu); padding: 15px; border-radius: 12px; margin-bottom: 30px; display: flex; align-items: center; gap: 15px;">
+            <i class="fas fa-robot" style="font-size: 1.5rem; color: var(--accent-cpu);"></i>
+            <div>
+                <div
+                    style="font-weight: 600; color: var(--accent-cpu); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                    AI Insight</div>
+                <div id="rec-text" style="font-size: 1rem;">Initializing AI analysis...</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- CPU Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="metric-title" id="cpu-name">CPU Load</div>
+                        <div class="prediction-badge"><i class="fas fa-robot"></i> Forecast: <span
+                                id="cpu-pred">--</span>%</div>
+                    </div>
+                    <span class="alert-badge" id="cpu-alert">ANOMALY</span>
+                </div>
+                <div class="metric-value" id="cpu-value">--</div>
+                <div class="chart-container">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+
+            <!-- RAM Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="metric-title" id="ram-name">Memory Usage</div>
+                        <div class="metric-sub" id="ram-details">-- / -- GB</div>
+                    </div>
+                    <span class="alert-badge" id="ram-alert">LEAK DETECTED</span>
+                </div>
+                <div class="metric-value" id="ram-value">--</div>
+                <div class="chart-container">
+                    <canvas id="ramChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Network Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="metric-title" id="net-name">Network Traffic</div>
+                </div>
+                <div class="metric-value" id="net-value" style="font-size: 2.5rem;">0 KB/s</div>
+                <div class="metric-sub" style="margin-top: 10px;">
+                    <span style="color:var(--accent-net)"><i class="fas fa-arrow-down"></i> <span id="net-in">0.0</span>
+                        KB/s</span>
+                    <span style="color:var(--accent-cpu)"><i class="fas fa-arrow-up"></i> <span id="net-out">0.0</span>
+                        KB/s</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="netChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Disk Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="metric-title" id="disk-name">Disk Usage (C:)</div>
+                        <div class="metric-sub" id="disk-details">-- / -- GB</div>
+                    </div>
+                    <span class="alert-badge" id="disk-alert">FULL</span>
+                </div>
+                <div class="metric-value" id="disk-value">--</div>
+                <div class="chart-container">
+                    <canvas id="diskChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Battery Card -->
+            <div class="card" id="bat-card" style="display:none;"> <!-- Hidden by default if desktop -->
+                <div class="card-header">
+                    <div>
+                        <div class="metric-title">Battery</div>
+                        <div class="metric-sub" id="bat-status">Plugged In</div>
+                    </div>
+                    <span class="alert-badge" id="bat-alert">LOW</span>
+                </div>
+                <div class="metric-value" id="bat-value">--</div>
+                <div class="chart-container">
+                    <canvas id="batChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Multi-GPU Card (Split View) -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="metric-title">Graphics Controllers</div>
+                </div>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <div class="metric-sub" id="gpu1-name" style="font-size: 0.8rem; height: 1.2em; overflow: hidden;">GPU 1</div>
+                        <div class="metric-value" id="gpu1-value" style="font-size: 2rem;">--</div>
+                        <div class="chart-container" style="height: 120px;">
+                            <canvas id="gpu1Chart"></canvas>
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <div class="metric-sub" id="gpu2-name" style="font-size: 0.8rem; height: 1.2em; overflow: hidden;">GPU 2</div>
+                        <div class="metric-value" id="gpu2-value" style="font-size: 2rem;">--</div>
+                        <div class="chart-container" style="height: 120px;">
+                            <canvas id="gpu2Chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Charts Configuration
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false, // Performance
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { display: false },
+                y: { beginAtZero: true, border: { display: false } }
+            },
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            elements: { point: { radius: 0, hitRadius: 10 } }
+        };
+
+        const createChart = (id, color) => {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const ctx = el.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, color + '66');
+            gradient.addColorStop(1, 'transparent');
+
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(60).fill(''),
+                    datasets: [{
+                        data: Array(60).fill(0),
+                        borderColor: color,
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    ...commonOptions,
+                    scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, suggestedMax: 100 } }
+                }
+            });
+        };
+
+        const cpuChart = createChart('cpuChart', '#38bdf8');
+        const ramChart = createChart('ramChart', '#a78bfa');
+        const diskChart = createChart('diskChart', '#fb7185');
+        const batChart = createChart('batChart', '#fde047');
+        const gpu1Chart = createChart('gpu1Chart', '#22d3ee');
+        const gpu2Chart = createChart('gpu2Chart', '#818cf8');
+
+        const netCtx = document.getElementById('netChart').getContext('2d');
+        const netChart = new Chart(netCtx, {
+            type: 'line',
+            data: {
+                labels: Array(60).fill(''),
+                datasets: [
+                    { label: 'In', borderColor: '#34d399', data: Array(60).fill(0), borderWidth: 2, tension: 0.4 },
+                    { label: 'Out', borderColor: '#38bdf8', data: Array(60).fill(0), borderWidth: 2, tension: 0.4, borderDash: [5, 5] }
+                ]
+            },
+            options: commonOptions
+        });
+
+        // WebSocket & UI Logic
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+        const statusEl = document.getElementById('connection-status');
+
+        let lastNetRecv = 0;
+        let lastNetSent = 0;
+
+        ws.onopen = () => {
+            statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> Live Feed';
+            statusEl.className = 'status-badge';
+        };
+
+        ws.onclose = () => {
+            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Disconnected';
+            statusEl.className = 'status-badge disconnected';
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            // Component names (Dynamic updates)
+            const componentNames = {
+                'cpu': data.cpu_name,
+                'gpu1': data.gpu_name1,
+                'gpu2': data.gpu_name2,
+                'ram': data.ram_name,
+                'disk': data.disk_name,
+                'net': data.net_name
+            };
+
+            for (const [id, name] of Object.entries(componentNames)) {
+                if (name) {
+                    const el = document.getElementById(`${id}-name`);
+                    if (el && el.textContent !== name) {
+                        el.textContent = name;
+                    }
+                }
+            }
+
+            // AI Rec
+            if (data.recommendation) {
+                const recEl = document.getElementById('rec-text');
+                if (recEl) recEl.textContent = data.recommendation;
+            }
+
+            // CPU
+            updateMetric('cpu', data.cpu.toFixed(1) + '%', data.cpu, cpuChart, data.anomaly_cpu);
+            document.getElementById('cpu-pred').textContent = data.predicted_cpu_next;
+
+            // RAM
+            updateMetric('ram', data.ram_percent.toFixed(1) + '%', data.ram_percent, ramChart, data.anomaly_ram);
+            const totalGB = (data.ram_total / 1073741824).toFixed(1);
+            const usedGB = (data.ram_used / 1073741824).toFixed(1);
+            document.getElementById('ram-details').textContent = `${usedGB} / ${totalGB} GB`;
+
+            // Disk
+            if (data.disk_percent !== undefined) {
+                updateMetric('disk', data.disk_percent.toFixed(1) + '%', data.disk_percent, diskChart, data.disk_percent > 90);
+                const dTotal = (data.disk_total / 1073741824).toFixed(1);
+                const dFree = (data.disk_free / 1073741824).toFixed(1);
+                const dUsed = (dTotal - dFree).toFixed(1);
+                document.getElementById('disk-details').textContent = `${dUsed} / ${dTotal} GB`;
+            }
+
+            // Battery
+            const batCard = document.getElementById('bat-card');
+            if (batCard && data.bat_exist === 1) {
+                batCard.style.display = 'block';
+                const isPlugged = (data.bat_plug === 1);
+                const pct = data.bat_pct || 0;
+                updateMetric('bat', pct + '%', pct, batChart, (!isPlugged && pct < 20));
+                document.getElementById('bat-status').innerHTML = isPlugged
+                    ? '<i class="fas fa-plug"></i> Charging'
+                    : '<i class="fas fa-battery-half"></i> On Battery';
+            }
+
+            // GPU 1
+            if (data.gpu1 !== undefined) {
+                updateMetric('gpu1', data.gpu1.toFixed(1) + '%', data.gpu1, gpu1Chart, data.gpu1 > 90);
+            }
+            // GPU 2
+            if (data.gpu2 !== undefined && data.gpu2 > 0 || data.gpu_name2 !== "-") {
+                updateMetric('gpu2', data.gpu2.toFixed(1) + '%', data.gpu2, gpu2Chart, data.gpu2 > 90);
+            }
+
+            // Network
+            if (lastNetRecv !== 0) {
+                const diffRecv = (data.net_recv - lastNetRecv) / 1024; // KB
+                const diffSent = (data.net_sent - lastNetSent) / 1024;
+                const total = diffRecv + diffSent;
+
+                document.getElementById('net-value').textContent =
+                    total > 1024 ? (total / 1024).toFixed(1) + ' MB/s' : total.toFixed(1) + ' KB/s';
+
+                document.getElementById('net-in').textContent = diffRecv.toFixed(1);
+                document.getElementById('net-out').textContent = diffSent.toFixed(1);
+
+                const dRecv = netChart.data.datasets[0].data;
+                const dSent = netChart.data.datasets[1].data;
+                dRecv.shift(); dRecv.push(diffRecv);
+                dSent.shift(); dSent.push(diffSent);
+                netChart.update();
+            }
+            lastNetRecv = data.net_recv;
+            lastNetSent = data.net_sent;
+        };
+
+        function updateMetric(id, text, val, chart, isAnomaly) {
+            const valEl = document.getElementById(`${id}-value`);
+            valEl.textContent = text;
+
+            // Anomaly Alert (only if element exists)
+            const alertEl = document.getElementById(`${id}-alert`);
+            if (alertEl) {
+                if (isAnomaly) {
+                    alertEl.style.display = 'inline-block';
+                    valEl.style.color = 'var(--danger)';
+                } else {
+                    alertEl.style.display = 'none';
+                    valEl.style.color = 'var(--text-primary)';
+                }
+            } else if (isAnomaly) {
+                valEl.style.color = 'var(--danger)';
+            } else {
+                valEl.style.color = 'var(--text-primary)';
+            }
+
+            const d = chart.data.datasets[0].data;
+            d.shift();
+            d.push(val);
+            chart.update();
+        }
+    </script>
+</body>
+
+</html>
